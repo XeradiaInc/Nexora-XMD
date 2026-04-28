@@ -1,12 +1,1 @@
-// --- Express server for Render port binding ---
-const express = require('express')
-const app = express()
-const PORT = process.env.PORT || 3000
-
-app.get('/', (req, res) => {
-  res.send('Bot is running')
-})
-
-app.listen(PORT, () => {
-  console.log(`Listening on port ${PORT}`)
-})
+const express = require('express'); const multer = require('multer'); const fs = require('fs'); const path = require('path'); const QRCode = require('qrcode'); const app = express(); const PORT = process.env.PORT || 3000; const upload = multer({ dest: 'tmp/' }); app.use(express.static(path.join(__dirname, 'public'))); app.get('/', (req, res) => { res.sendFile(path.join(__dirname, 'public', 'index.html')); }); app.get('/status', (req, res) => { const sessionPath = path.join(__dirname, 'session'); const files = fs.existsSync(sessionPath) ? fs.readdirSync(sessionPath) : []; const hasSession = files.some(f => /creds|session|auth/i.test(f)); res.json({ hasSession, files }); }); app.get('/qr', async (req, res) => { try { const qrFile = path.join(__dirname, 'session', 'qr.json'); if (!fs.existsSync(qrFile)) return res.json({ ok: false, message: 'no qr' }); const obj = JSON.parse(fs.readFileSync(qrFile, 'utf8')); const dataUrl = await QRCode.toDataURL(obj.qr); res.json({ ok: true, qr: obj.qr, dataUrl, ts: obj.ts }); } catch (e) { res.status(500).json({ ok: false, error: String(e) }); } }); app.get('/pairing', (req, res) => { try { const pairingFile = path.join(__dirname, 'session', 'pairing.json'); if (!fs.existsSync(pairingFile)) return res.json({ ok: false, message: 'no pairing' }); const obj = JSON.parse(fs.readFileSync(pairingFile, 'utf8')); res.json({ ok: true, ...obj }); } catch (e) { res.status(500).json({ ok: false, error: String(e) }); } }); app.post('/upload', upload.single('sessionfile'), (req, res) => { try { if (!req.file) return res.status(400).send('no file'); const targetDir = path.join(__dirname, 'session'); if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true }); const targetPath = path.join(targetDir, 'creds.json'); fs.renameSync(req.file.path, targetPath); try { const qrPath = path.join(targetDir, 'qr.json'); const pairingPath = path.join(targetDir, 'pairing.json'); if (fs.existsSync(qrPath)) fs.unlinkSync(qrPath); if (fs.existsSync(pairingPath)) fs.unlinkSync(pairingPath); } catch (e) {} res.json({ ok: true, path: 'session/creds.json' }); } catch (e) { console.error(e); res.status(500).json({ ok: false, error: String(e) }); } }); app.listen(PORT, () => { console.log(`Nexora MD dashboard running on http://localhost:${PORT}`); });
